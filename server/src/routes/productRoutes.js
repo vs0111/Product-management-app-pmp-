@@ -4,6 +4,7 @@ const {
   createProduct,
   updateProduct,
   getProducts,
+  getProductById,
   addToWishlist,
   removeFromWishlist,
   getWishlist,
@@ -15,6 +16,7 @@ const upload = require("../middleware/uploadMiddleware");
 router.post("/", protect, upload.array("images", 10), createProduct);
 router.put("/:id", protect, upload.array("images", 10), updateProduct);
 router.get("/", getProducts);
+router.get("/:id", getProductById);
 
 // Wishlist routes
 router.get("/wishlist", protect, getWishlist);
