@@ -13,13 +13,16 @@ const {
 const protect = require("../middleware/authMiddleware");
 const upload = require("../middleware/uploadMiddleware");
 
+const validate = require("../middleware/validationMiddleware");
+const { createProductValidation } = require("../validations/productValidation");
+
 // Wishlist routes (must be before /:id)
 router.get("/wishlist", protect, getWishlist);
 router.post("/wishlist/:id", protect, addToWishlist);
 router.delete("/wishlist/:id", protect, removeFromWishlist);
 
 // Product routes
-router.post("/", protect, upload.array("images", 10), createProduct);
+router.post("/", protect, upload.array("images", 10), createProductValidation, validate, createProduct);
 router.put("/:id", protect, upload.array("images", 10), updateProduct);
 router.get("/", getProducts);
 router.get("/search", searchProducts); // Dedicated search endpoint

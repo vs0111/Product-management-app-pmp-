@@ -170,7 +170,7 @@ const getProducts = async (req, res) => {
       search,
       subCategory,
       page = 1,
-      limit = 10,
+      limit = 9,
     } = req.query;
 
     const query = {};
@@ -185,7 +185,7 @@ const getProducts = async (req, res) => {
 
     // Filter by subcategory
     if (subCategory) {
-      query.subCategory = subCategory;
+      query.subCategory = { $in: subCategory.split(",") };
     }
 
     const products = await Product.find(query)
@@ -335,10 +335,10 @@ const getWishlist = async (req, res) => {
   }
 };
 
-// Search Products (Dedicated Endpoint)
+// Search Products 
 const searchProducts = async (req, res) => {
   try {
-    const { keyword, page = 1, limit = 10 } = req.query;
+    const { keyword, subCategory, page = 1, limit = 9 } = req.query;
 
     if (!keyword) {
       return res.status(200).json({
@@ -351,6 +351,11 @@ const searchProducts = async (req, res) => {
     }
 
     const query = { name: { $regex: keyword, $options: "i" } };
+    
+
+    if (subCategory) {
+      query.subCategory = { $in: subCategory.split(",") };
+    }
 
     const products = await Product.find(query)
       .populate("subCategory", "name")
