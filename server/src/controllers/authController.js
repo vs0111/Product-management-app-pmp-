@@ -7,6 +7,7 @@ const registerUser = async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
+    // Check existing user
     const existingUser = await User.findOne({ email });
 
     if (existingUser) {
@@ -16,8 +17,10 @@ const registerUser = async (req, res) => {
       });
     }
 
+    // Hash password
     const hashedPassword = await bcrypt.hash(password, 12);
 
+    // Create user
     const user = await User.create({
       name: name.trim(),
       email: email.trim().toLowerCase(),
@@ -48,6 +51,7 @@ const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    // Find user by email
     const user = await User.findOne({
       email: email.trim().toLowerCase(),
     });
@@ -59,6 +63,7 @@ const loginUser = async (req, res) => {
       });
     }
 
+    // Verify password
     const isPasswordMatched = await bcrypt.compare(
       password,
       user.password
@@ -71,6 +76,7 @@ const loginUser = async (req, res) => {
       });
     }
 
+    // Generate JWT token
     const token = generateToken(user._id);
 
     res.status(200).json({
