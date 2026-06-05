@@ -8,6 +8,7 @@ const {
   addToWishlist,
   removeFromWishlist,
   getWishlist,
+  searchProducts,
 } = require("../controllers/productController");
 const protect = require("../middleware/authMiddleware");
 const upload = require("../middleware/uploadMiddleware");
@@ -21,6 +22,7 @@ router.delete("/wishlist/:id", protect, removeFromWishlist);
 router.post("/", protect, upload.array("images", 10), createProduct);
 router.put("/:id", protect, upload.array("images", 10), updateProduct);
 router.get("/", getProducts);
+router.get("/search", searchProducts); // Dedicated search endpoint
 router.get("/:id", getProductById);
 
 module.exports = router;

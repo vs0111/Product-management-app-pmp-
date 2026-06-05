@@ -335,6 +335,47 @@ const getWishlist = async (req, res) => {
   }
 };
 
+// Search Products (Dedicated Endpoint)
+const searchProducts = async (req, res) => {
+  try {
+    const { keyword, page = 1, limit = 10 } = req.query;
+
+    if (!keyword) {
+      return res.status(200).json({
+        success: true,
+        products: [],
+        totalProducts: 0,
+        totalPages: 0,
+        currentPage: 1,
+      });
+    }
+
+    const query = { name: { $regex: keyword, $options: "i" } };
+
+    const products = await Product.find(query)
+      .populate("subCategory", "name")
+      .limit(Number(limit))
+      .skip((Number(page) - 1) * Number(limit))
+      .sort({ createdAt: -1 });
+
+    const totalProducts = await Product.countDocuments(query);
+
+    res.status(200).json({
+      success: true,
+      products,
+      totalProducts,
+      totalPages: Math.ceil(totalProducts / limit),
+      currentPage: Number(page),
+    });
+  } catch (error) {
+    console.error("Search Products Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
+  }
+};
+
 module.exports = {
   createProduct,
   updateProduct,
@@ -343,4 +384,5 @@ module.exports = {
   addToWishlist,
   removeFromWishlist,
   getWishlist,
+  searchProducts,
 };
