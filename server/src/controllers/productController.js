@@ -15,28 +15,34 @@ const createProduct = async (req, res) => {
     // Validate required fields
     if (!name || !subCategory || !variants || variants.length === 0) {
       return res.status(400).json({
-        message: "Name, subCategory, and at least one variant are required.",
+        success: false,
+        message:
+          "Name, subCategory, and at least one variant are required",
       });
     }
 
     // Validate images
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({
-        message: "At least 1 image is required.",
+        success: false,
+        message: "At least 1 image is required",
       });
     }
 
     if (req.files.length > 3) {
       return res.status(400).json({
-        message: "A maximum of 3 images is allowed.",
+        success: false,
+        message: "Maximum 3 images are allowed",
       });
     }
 
     // Store image paths
-    const images = req.files.map((file) => `/uploads/${file.filename}`);
+    const images = req.files.map(
+      (file) => `/uploads/${file.filename}`
+    );
 
     // Create product
-    const product = new Product({
+    const product = await Product.create({
       name,
       subCategory,
       variants,
@@ -44,16 +50,17 @@ const createProduct = async (req, res) => {
       images,
     });
 
-    await product.save();
-
     res.status(201).json({
       success: true,
       message: "Product created successfully",
       product,
     });
   } catch (error) {
+    console.error("Create Product Error:", error);
+
     res.status(500).json({
-      message: error.message,
+      success: false,
+      message: "Internal Server Error",
     });
   }
 };
@@ -77,24 +84,66 @@ const updateProduct = async (req, res) => {
       description,
     };
 
-    // Update images if uploaded
-    if (req.files && req.files.length > 0) {
-      if (req.files.length > 3) {
-        return res.status(400).json({
-          message: "A maximum of 3 images is allowed.",
-        });
-      }
+    // Keep existing images
+    let finalImages = [];
 
-      updateData.images = req.files.map((file) => `/uploads/${file.filename}`);
+    if (req.body.existingImages) {
+      if (typeof req.body.existingImages === "string") {
+        try {
+          finalImages = JSON.parse(req.body.existingImages);
+        } catch {
+          finalImages = [req.body.existingImages];
+        }
+      } else if (Array.isArray(req.body.existingImages)) {
+        finalImages = req.body.existingImages;
+      }
     }
 
-    const product = await Product.findByIdAndUpdate(id, updateData, {
-      new: true,
-      runValidators: true,
-    });
+    // Add new uploaded images
+    if (req.files && req.files.length > 0) {
+      const newImages = req.files.map(
+        (file) => `/uploads/${file.filename}`
+      );
+
+      finalImages = [...finalImages, ...newImages];
+    }
+
+    // Validate image count
+    if (finalImages.length > 3) {
+      return res.status(400).json({
+        success: false,
+        message: "Maximum 3 images are allowed",
+      });
+    }
+
+    // At least one image required
+    if (
+      req.body.existingImages !== undefined &&
+      finalImages.length === 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "At least 1 image is required",
+      });
+    }
+
+    if (finalImages.length > 0) {
+      updateData.images = finalImages;
+    }
+
+    // Update product
+    const product = await Product.findByIdAndUpdate(
+      id,
+      updateData,
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
 
     if (!product) {
       return res.status(404).json({
+        success: false,
         message: "Product not found",
       });
     }
@@ -105,8 +154,11 @@ const updateProduct = async (req, res) => {
       product,
     });
   } catch (error) {
+    console.error("Update Product Error:", error);
+
     res.status(500).json({
-      message: error.message,
+      success: false,
+      message: "Internal Server Error",
     });
   }
 };
@@ -114,11 +166,16 @@ const updateProduct = async (req, res) => {
 // Get Products
 const getProducts = async (req, res) => {
   try {
-    const { search, subCategory, page = 1, limit = 10 } = req.query;
+    const {
+      search,
+      subCategory,
+      page = 1,
+      limit = 10,
+    } = req.query;
 
     const query = {};
 
-    // Search by name
+    // Search by product name
     if (search) {
       query.name = {
         $regex: search,
@@ -133,22 +190,52 @@ const getProducts = async (req, res) => {
 
     const products = await Product.find(query)
       .populate("subCategory", "name")
-      .limit(limit * 1)
-      .skip((page - 1) * limit)
-      .exec();
+      .limit(Number(limit))
+      .skip((Number(page) - 1) * Number(limit))
+      .sort({ createdAt: -1 });
 
-    const count = await Product.countDocuments(query);
+    const totalProducts = await Product.countDocuments(query);
 
     res.status(200).json({
       success: true,
       products,
-      totalPages: Math.ceil(count / limit),
+      totalProducts,
+      totalPages: Math.ceil(totalProducts / limit),
       currentPage: Number(page),
-      totalProducts: count,
     });
   } catch (error) {
+    console.error("Get Products Error:", error);
+
     res.status(500).json({
-      message: error.message,
+      success: false,
+      message: "Internal Server Error",
+    });
+  }
+};
+
+// Get Product Details
+const getProductById = async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id)
+      .populate("subCategory", "name");
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      product,
+    });
+  } catch (error) {
+    console.error("Get Product Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
     });
   }
 };
@@ -159,22 +246,27 @@ const addToWishlist = async (req, res) => {
     const userId = req.user._id;
     const productId = req.params.id;
 
+    // Check product exists
     const product = await Product.findById(productId);
 
     if (!product) {
       return res.status(404).json({
+        success: false,
         message: "Product not found",
       });
     }
 
     const user = await User.findById(userId);
 
+    // Check product already exists in wishlist
     if (user.wishlist.includes(productId)) {
       return res.status(400).json({
+        success: false,
         message: "Product already in wishlist",
       });
     }
 
+    // Add to wishlist
     user.wishlist.push(productId);
     await user.save();
 
@@ -184,8 +276,11 @@ const addToWishlist = async (req, res) => {
       wishlist: user.wishlist,
     });
   } catch (error) {
+    console.error("Add Wishlist Error:", error);
+
     res.status(500).json({
-      message: error.message,
+      success: false,
+      message: "Internal Server Error",
     });
   }
 };
@@ -198,7 +293,10 @@ const removeFromWishlist = async (req, res) => {
 
     const user = await User.findById(userId);
 
-    user.wishlist = user.wishlist.filter((id) => id.toString() !== productId);
+    // Remove from wishlist
+    user.wishlist = user.wishlist.filter(
+      (id) => id.toString() !== productId
+    );
 
     await user.save();
 
@@ -208,8 +306,11 @@ const removeFromWishlist = async (req, res) => {
       wishlist: user.wishlist,
     });
   } catch (error) {
+    console.error("Remove Wishlist Error:", error);
+
     res.status(500).json({
-      message: error.message,
+      success: false,
+      message: "Internal Server Error",
     });
   }
 };
@@ -217,36 +318,20 @@ const removeFromWishlist = async (req, res) => {
 // Get Wishlist Products
 const getWishlist = async (req, res) => {
   try {
-    const userId = req.user._id;
-
-    const user = await User.findById(userId).populate("wishlist");
+    const user = await User.findById(req.user._id)
+      .populate("wishlist");
 
     res.status(200).json({
       success: true,
       wishlist: user.wishlist,
     });
   } catch (error) {
+    console.error("Get Wishlist Error:", error);
+
     res.status(500).json({
-      message: error.message,
+      success: false,
+      message: "Internal Server Error",
     });
-  }
-};
-
-// Get Product by ID
-const getProductById = async (req, res) => {
-  try {
-    const product = await Product.findById(req.params.id).populate("subCategory", "name");
-
-    if (!product) {
-      return res.status(404).json({ message: "Product not found" });
-    }
-
-    res.status(200).json({
-      success: true,
-      product,
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
   }
 };
 
